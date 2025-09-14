@@ -11,7 +11,7 @@ from parsers.markdown import MarkdownParser
 # (Первое задание)
 
 parser = MarkdownParser()
-res = parser.parse_file("./examples/simple_lesson.md")
-# res = parser.parse_file("./examples/simple_lesson2.md")
+# res = parser.parse_file("./examples/simple_lesson.md")
+res = parser.parse_file("./examples/simple_lesson2.md")
 # res = parser.parse_file("./examples/markdown_example.md")
 pprint.pprint(res)

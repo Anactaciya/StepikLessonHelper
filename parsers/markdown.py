@@ -1,5 +1,5 @@
 from pyparsing import (
-    Group, ZeroOrMore, Suppress,
+    Group, ZeroOrMore, Suppress, AtLineStart,
     Dict, Optional, Word, alphanums, restOfLine,
     SkipTo, Literal
 )
@@ -17,14 +17,14 @@ from models import Lesson, Step
 class MarkdownParser:
     def __init__(self):
         # Парсеры для названий
-        lesson_title = Suppress('#') + restOfLine("title")
-        step_title = Suppress('##') + restOfLine("step_title")
+        lesson_title = AtLineStart(Suppress('#')) + restOfLine("title")
+        step_title = AtLineStart(Suppress(Literal('## '))) + restOfLine("step_title")
 
-        content_parser = SkipTo(Literal('##') | Literal('#') | '$END')("text")
+        content_parser = SkipTo(AtLineStart(Literal('## ')) | '$END')("text")
 
         # Парсер для переменных (name = value)
         variable_name = Word(alphanums + "_")
-        full_expression = (variable_name + Suppress('=') +
+        full_expression = (AtLineStart(variable_name) + Suppress('=') +
                            restOfLine('variable_name'))
 
         self.lesson_grammar = Dict(
