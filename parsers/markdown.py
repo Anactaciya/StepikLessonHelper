@@ -1,16 +1,18 @@
+from pprint import pprint
 from pyparsing import (
     Group, ZeroOrMore, Suppress, AtLineStart,
     Dict, Optional, Word, alphanums, restOfLine,
-    SkipTo, Literal
+    SkipTo, Literal, Combine, LineStart, OneOrMore, pyparsing_common
 )
-
-# потом создать классы Lesson и Step
 import sys
 from pathlib import Path
+
 
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
+
+# потом создать классы Lesson и Step
 from models import Lesson, Step
 
 
@@ -18,7 +20,8 @@ class MarkdownParser:
     def __init__(self):
         # Парсеры для названий
         lesson_title = AtLineStart(Suppress('#')) + restOfLine("title")
-        step_title = AtLineStart(Suppress(Literal('## '))) + restOfLine("step_title")
+        step_title = AtLineStart(
+            Suppress(Literal('## '))) + restOfLine("step_title")
 
         content_parser = SkipTo(AtLineStart(Literal('## ')) | '$END')("text")
 
@@ -53,17 +56,45 @@ class MarkdownParser:
 
         if hasattr(result, 'steps'):
             for step in result.steps:
-                step_dict = {'step_title': step[0].strip()}
-                if len(step) > 1:
-                    step_dict['step_content'] = step[1].strip()
-                else:
-                    step_dict['step_content'] = ''
-                parsed_data.append(step_dict)
+                self.parse_step(step[0].strip(), step[1].strip())
+                parsed_data.append(self.parse_step(
+                    step[0].strip(), step[1].strip()))
 
         return parsed_data
+
+    def parse_step(self, header: str, content: str):
+
+        step_type = header.split()[0]
+
+        res = {
+            "step_title": " ".join(header.split()[1::]),
+            "step_type": step_type
+        }
+
+        if step_type == "NUMBER":
+            answer_prefix = Suppress("ANSWER" + Optional('=') + Optional(':'))
+            number = Combine(pyparsing_common.number +
+                             Optional("+-" + pyparsing_common.number))
+            answer = answer_prefix + number
+
+            grammar = Dict(
+                Group(
+                    SkipTo(LineStart() + Literal('ANSWER')) +
+                    OneOrMore(answer))
+            )
+
+            parse_res = grammar.parse_string(content)
+
+            res["step_description"] = parse_res[0][0]
+            res["step_answers"] = parse_res[0][1::]
+
+        else:
+            res["step_description"] = content
+
+        return res
 
 
 if __name__ == "__main__":
     parser = MarkdownParser()
-    res = parser.parse_file("./examples/simple_lesson.md")
-    print(res)
+    res = parser.parse_file("./examples/simple_lesson3.md")
+    pprint(res)
