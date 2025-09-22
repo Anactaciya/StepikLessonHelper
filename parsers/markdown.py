@@ -2,7 +2,8 @@ from pprint import pprint
 from pyparsing import (
     Group, ZeroOrMore, Suppress, AtLineStart,
     Dict, Optional, Word, alphanums, restOfLine,
-    SkipTo, Literal, Combine, LineStart, OneOrMore, pyparsing_common
+    SkipTo, Literal, Combine, LineStart, OneOrMore, pyparsing_common,
+    QuotedString, alphas, oneOf, MatchFirst
 )
 import sys
 from pathlib import Path
@@ -22,8 +23,12 @@ class MarkdownParser:
         lesson_title = AtLineStart(Suppress('#')) + restOfLine("title")
         step_title = AtLineStart(
             Suppress(Literal('## '))) + restOfLine("step_title")
-
-        content_parser = SkipTo(AtLineStart(Literal('## ')) | '$END')("text")
+        
+        content_parser = MatchFirst([
+            QuotedString('"""', multiline=True),
+            QuotedString("'''", multiline=True),
+            SkipTo(AtLineStart(Literal('## ')) | '$END')
+            ])("text")
 
         # Парсер для переменных (name = value)
         variable_name = Word(alphanums + "_")
@@ -35,6 +40,7 @@ class MarkdownParser:
             ZeroOrMore(Group(full_expression))("variables") +
             ZeroOrMore(Group(step_title + Optional(content_parser)))("steps")
         )
+        self.allowed_step_types = ['TEXT', 'NUMBER', 'SKIP']
 
     def parse_file(self, link: str):
         with open(link, 'r', encoding='utf-8') as file:
@@ -56,30 +62,33 @@ class MarkdownParser:
 
         if hasattr(result, 'steps'):
             for step in result.steps:
-                self.parse_step(step[0].strip(), step[1].strip())
-                parsed_data.append(self.parse_step(
-                    step[0].strip(), step[1].strip()))
+                step_res = self.parse_step(
+                    step['step_title'], step['text'])
+                if step_res:
+                    parsed_data.append(self.parse_step(
+                        step['step_title'], step['text']))
 
         return parsed_data
 
     def parse_step(self, header: str, content: str):
-
-        step_type = header.split()[0]
+        header_pars = (Optional(oneOf(self.allowed_step_types), default="TEXT") + restOfLine).parseString(header)
 
         res = {
-            "step_title": " ".join(header.split()[1::]),
-            "step_type": step_type
+            "step_title": header_pars[1].strip(),
+            "step_type": header_pars[0]
         }
+        step_type = header_pars[0]
 
         if step_type == "NUMBER":
             answer_prefix = Suppress("ANSWER" + Optional('=') + Optional(':'))
             number = Combine(pyparsing_common.number +
-                             Optional("+-" + pyparsing_common.number))
+                             Optional(Suppress(Optional(" ")) + "+-" +
+                                      Suppress(Optional(" ")) + pyparsing_common.number))
             answer = answer_prefix + number
 
             grammar = Dict(
                 Group(
-                    SkipTo(LineStart() + Literal('ANSWER')) +
+                    SkipTo(answer) +
                     OneOrMore(answer))
             )
 
@@ -87,7 +96,8 @@ class MarkdownParser:
 
             res["step_description"] = parse_res[0][0]
             res["step_answers"] = parse_res[0][1::]
-
+        elif step_type == "SKIP":
+            return None
         else:
             res["step_description"] = content
 
